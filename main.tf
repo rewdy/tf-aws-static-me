@@ -48,7 +48,7 @@ resource "aws_acm_certificate" "website" {
 # Validates the ACM cert by creating a Route53 record 
 # NOTE: this works because `validation_method` is `DNS` above
 resource "aws_route53_record" "cert_validation" {
-  count = var.create_certificate == true ? 1 : 0
+  # This should only run if we create a cert above
   for_each = {
     for dvo in aws_acm_certificate.website[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
@@ -76,13 +76,13 @@ resource "aws_acm_certificate_validation" "website_cert" {
 data "aws_acm_certificate" "website" {
   provider = aws.us-east-1
 
-  depends_on = var.create_certificate == true ? [
-    aws_acm_certificate.wildcard_website,
-    aws_route53_record.wildcard_validation,
-    aws_acm_certificate_validation.wildcard_cert,
-  ] : null
+  depends_on = [
+    aws_acm_certificate.website,
+    aws_route53_record.cert_validation,
+    aws_acm_certificate_validation.website_cert,
+  ]
 
-  domain      = var.domain_name
+  domain      = var.create_certificate ? var.domain_name : var.certificate_domain != null ? var.certificate_domain : var.domain_name
   statuses    = ["ISSUED"]
   most_recent = true
 }
@@ -91,26 +91,43 @@ data "aws_acm_certificate" "website" {
 # Bucket for website files
 resource "aws_s3_bucket" "website_files" {
   bucket = "${var.domain_name}-files"
-  acl    = "public-read"
 
+  # This tells terraform it can delete it even if it has files
   force_destroy = true
-
-  cors_rule {
-    allowed_headers = ["Authorization", "Content-Length"]
-    allowed_methods = ["GET", "POST"]
-    allowed_origins = ["https://${var.domain_name}"]
-    max_age_seconds = 3000
-  }
-
-  website {
-    index_document = "index.html"
-    error_document = var.support_spa ? "" : "404.html"
-  }
 
   tags = local.tags
 
   lifecycle {
     ignore_changes = [tags["Changed"]]
+  }
+}
+
+resource "aws_s3_bucket_acl" "example_bucket_acl" {
+  bucket = aws_s3_bucket.website_files.bucket
+  acl    = "public-read"
+}
+
+resource "aws_s3_bucket_cors_configuration" "website_files_cors" {
+  bucket = aws_s3_bucket.website_files.bucket
+
+  cors_rule {
+    allowed_headers = ["Authorization", "Content-Length"]
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = ["https://${var.domain_name}"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
+resource "aws_s3_bucket_website_configuration" "website_files_config" {
+  bucket = aws_s3_bucket.website_files.bucket
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = var.support_spa ? "" : "404.html"
   }
 }
 
@@ -172,7 +189,7 @@ resource "aws_cloudfront_distribution" "website_cdn" {
     response_code         = var.support_spa ? 200 : 404
   }
 
-  tags = tags
+  tags = local.tags
 
   lifecycle {
     ignore_changes = [
