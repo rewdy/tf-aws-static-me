@@ -23,6 +23,7 @@ variable "create_certificate" {
 variable "certificate_domain" {
   type        = string
   description = "The domain to use for the certificate. If you have a pre-existing wildcard cert, you can specify the wildcard domain here."
+  default     = null
 }
 
 variable "tags" {
