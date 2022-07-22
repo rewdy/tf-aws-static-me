@@ -50,7 +50,8 @@ resource "aws_acm_certificate" "website" {
 resource "aws_route53_record" "cert_validation" {
   # This should only run if we create a cert above
   for_each = {
-    for dvo in aws_acm_certificate.website[0].domain_validation_options : dvo.domain_name => {
+    for dvo in aws_acm_certificate.website == [] ? [] : aws_acm_certificate.website[0].domain_validation_options :
+    dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
       type   = dvo.resource_record_type
