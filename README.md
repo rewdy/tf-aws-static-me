@@ -1,4 +1,6 @@
-# AWS Static Website Terraform Module
+# Static Me
+
+_An minimal static website terraform module for AWS._
 
 This is a terraform module to setup a simple static website in S3. Ideal for react apps, gatsby sites, or whatever other static content you got.
 
