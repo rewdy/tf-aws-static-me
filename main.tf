@@ -33,10 +33,11 @@ data "aws_route53_zone" "main" {
 ## ACM
 # Create certificate if one not specified in vars
 resource "aws_acm_certificate" "website" {
-  count             = var.create_certificate == true ? 1 : 0
-  provider          = aws.us-east-1 # all certs go in us-east-1
-  domain_name       = var.domain_name
-  validation_method = "DNS"
+  count                     = var.create_certificate == true ? 1 : 0
+  provider                  = aws.us-east-1 # all certs go in us-east-1
+  domain_name               = var.domain_name
+  subject_alternative_names = ["*.${var.domain_name}"]
+  validation_method         = "DNS"
 
   tags = local.tags
 
@@ -103,22 +104,22 @@ resource "aws_s3_bucket" "website_files" {
   }
 }
 
-resource "aws_s3_bucket_acl" "example_bucket_acl" {
+resource "aws_s3_bucket_acl" "website_files_acl" {
   bucket = aws_s3_bucket.website_files.bucket
   acl    = "public-read"
 }
 
-resource "aws_s3_bucket_cors_configuration" "website_files_cors" {
-  bucket = aws_s3_bucket.website_files.bucket
+# resource "aws_s3_bucket_cors_configuration" "website_files_cors" {
+#   bucket = aws_s3_bucket.website_files.bucket
 
-  cors_rule {
-    allowed_headers = ["Authorization", "Content-Length"]
-    allowed_methods = ["GET", "HEAD"]
-    allowed_origins = ["https://${var.domain_name}"]
-    expose_headers  = ["ETag"]
-    max_age_seconds = 3000
-  }
-}
+#   cors_rule {
+#     allowed_headers = ["Authorization", "Content-Length"]
+#     allowed_methods = ["GET", "POST"]
+#     allowed_origins = ["https://${var.domain_name}"]
+#     expose_headers  = ["ETag"]
+#     max_age_seconds = 3000
+#   }
+# }
 
 resource "aws_s3_bucket_website_configuration" "website_files_config" {
   bucket = aws_s3_bucket.website_files.bucket
@@ -137,6 +138,8 @@ resource "aws_s3_bucket_website_configuration" "website_files_config" {
 resource "aws_cloudfront_distribution" "website_cdn" {
   enabled     = true
   price_class = var.cloudfront_price_class
+  aliases     = [var.domain_name]
+  comment     = "${var.domain_name} distribution"
 
   origin {
     origin_id   = "origin-bucket-${aws_s3_bucket.website_files.id}"
@@ -179,8 +182,9 @@ resource "aws_cloudfront_distribution" "website_cdn" {
   }
 
   viewer_certificate {
-    acm_certificate_arn = data.aws_acm_certificate.website.arn
-    ssl_support_method  = "sni-only"
+    acm_certificate_arn      = data.aws_acm_certificate.website.arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   custom_error_response {
