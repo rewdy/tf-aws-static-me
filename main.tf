@@ -104,8 +104,29 @@ resource "aws_s3_bucket" "website_files" {
   }
 }
 
+resource "aws_s3_bucket_ownership_controls" "website_files_ownership_controls" {
+  bucket = aws_s3_bucket.website_files.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "website_files_public_access_block" {
+  bucket = aws_s3_bucket.website_files.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
 resource "aws_s3_bucket_acl" "website_files_acl" {
-  bucket = aws_s3_bucket.website_files.bucket
+  depends_on = [
+    aws_s3_bucket_ownership_controls.website_files_ownership_controls,
+    aws_s3_bucket_public_access_block.website_files_public_access_block,
+  ]
+
+  bucket = aws_s3_bucket.website_files.id
   acl    = "public-read"
 }
 
@@ -122,7 +143,7 @@ resource "aws_s3_bucket_acl" "website_files_acl" {
 # }
 
 resource "aws_s3_bucket_website_configuration" "website_files_config" {
-  bucket = aws_s3_bucket.website_files.bucket
+  bucket = aws_s3_bucket.website_files.id
 
   index_document {
     suffix = "index.html"
@@ -229,7 +250,7 @@ resource "aws_s3_bucket_policy" "update_website_root_bucket_policy" {
   "Id": "PolicyForWebsiteEndpointsPublicContent",
   "Statement": [
     {
-      "Sid": "PublicRead",
+      "Sid": "PublicReadGetObject",
       "Effect": "Allow",
       "Principal": "*",
       "Action": [
